@@ -1,0 +1,4 @@
+main:
+  const r0, "Hello World!"
+  mov r1, r0
+  ret r1

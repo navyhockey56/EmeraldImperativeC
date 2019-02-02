@@ -53,27 +53,34 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		  then creates a return instruction with the mapped register; else, creates a
       return to a non-existant register.
     *)
-		if (Hashtbl.mem local_map id) then ( (*id has a mapping*)
+		if (Hashtbl.mem local_map id) then  (*id has a mapping*)
 			let loc = (Hashtbl.find local_map id) in (*get register value*)
-			[|I_ret (`L_Reg loc)|] (*create and return return instruction*)
-		) else (
-			let message = "Error: Variable - " ^ id ^ " - is not bound in this environment." in
-			let loc = next_location () in
-			let load_message = I_const ((`L_Reg loc), (`L_Str message)) in
-			let ihalt = I_halt (`L_Reg loc) in
-			[|load_message;ihalt|]
-		)
+			[|
+				I_ret (`L_Reg loc)
+			|]
+		else 
+			let r1 = `L_Reg (next_location ()) in 
+			let message = `L_Str ("Error: Variable - " ^ id ^ " - is not bound in this environment.") in
+			[|
+				I_const (r1, message);
+				I_halt r1 
+			|]
 
   (* Write a value to a variable *)
 	| ELocWr (id, expr) ->
 
 		(* Build code for expr and the value *)
 		let instr_for_expr, expr_value = evaluate_expression expr args next_location local_map function_names in
-
+		
 		let loc = if Hashtbl.mem local_map id then Hashtbl.find local_map id else next_location () in 
-		let inst1 = I_mov ((`L_Reg loc), expr_value) in (* copy the expr's value into new register *)
-		let inst2 = I_ret (`L_Reg loc) in (* return the value of the local variable *)
-		Array.append instr_for_expr ([|inst1;inst2|]) (* Combine the instructions *)
+		Hashtbl.replace local_map id loc;
+		
+		let r1 = `L_Reg loc in 
+		Array.append instr_for_expr  
+		[|
+			I_mov (r1, expr_value);
+			I_ret r1 
+		|]
 
 
   (* 

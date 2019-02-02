@@ -68,6 +68,15 @@ and print_program (fs:simpl_prog) =
 
 (*********************************************************************)
 
+let rec determine_file_name file_name = 
+	let length = String.length file_name in 
+	match (String.index_from_opt file_name 0 '/') with 
+		| None -> String.sub file_name 0 (length - 3)
+		| Some i -> 
+			let file_name = String.sub file_name (i + 1) (length - i - 1) in 
+			determine_file_name file_name 
+;;
+
 
 let parse_file name =
   let chan = open_in name in
@@ -77,15 +86,22 @@ let parse_file name =
     p
 
 let main () =
-	let file_name = Sys.argv.(1) in 
-	print_string file_name;
+	(* Retrieve the input file *)
+	let file_name = Sys.argv.(1) in
+
+	(* Determine the files name within the context of its parent directory *) 
+	let simple_file_name = determine_file_name file_name in
+  
+  (* Parse the input file *)
   let p = parse_file file_name in
+
+  (* Compile the program *)
   let (p':Instr.prog) = Compiler.compile_prog p in
 
-  let file_name_length = String.length file_name in 
-  let file_name = String.sub file_name 0 (file_name_length - 3) in 
-
-  let out_chan = open_out (file_name ^ ".evm") in
+  (* Open the output file *)
+  let out_chan = open_out (simple_file_name ^ ".evm") in
+  
+  (* Dump the output program into the file*)
   disassemble out_chan p'
 ;;
 
