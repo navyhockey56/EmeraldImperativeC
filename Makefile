@@ -1,5 +1,2 @@
-.PHONY = all,clean
-
-all:
-	rm -f *.naitve *.byte
-	ocamlbuild -cflag -g -lflag -g main.byte
+rm -f *.cmi *.o *.cmx *.naitve *.byte
+ocamlbuild -cflag -g -lflag -g main.byte
