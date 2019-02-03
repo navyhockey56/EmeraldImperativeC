@@ -7,11 +7,11 @@ EmeraldC is a compiler for the imperative langauge Emerald. EmeraldC compiles Em
 - OCamlfind
 - Ocamllex
 
-### Test Requirements
+### Test Requirements:
 - Ruby
 - EmeraldVM
 
-### Building the project
+### Building EmeraldC
 To build the project, execute:
 ```
 ./Makefile
@@ -25,7 +25,7 @@ Compiling an Emerald file is as simple as:
 ```
 Compiling will create a `.evm` with the same name as the Emerald program and place it in your current directory. You can then run the byte code using `EmeraldVM`
 
-### Running the EmeraldVM tests
+### Running the EmeraldC tests
 The ruby test script requires that `EmeraldVM` be on your PATH as `emeraldvm` and your project structure to be:
 ```
 emeraldc
