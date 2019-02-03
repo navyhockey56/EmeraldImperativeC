@@ -10,15 +10,15 @@ end
 
 number_passed = 0
 
-(input_dir = Dir["inputs/test_*.si"]).each do |input|
+(input_dir = Dir["inputs/test_*.em"]).each do |input|
 	puts "\n-----\n"
 	test_name = input[7...(input.length - 3)]
 
 	# Compile the program
-	error = !`../emeraldc "#{input}"`.empty? 
-	if error 
+	error = !`../emeraldc "#{input}"`.empty?
+	if error
 		print_test_result test_name, false, error
-		next 
+		next
 	end
 
 	# Run the rubevm
@@ -52,3 +52,4 @@ number_passed = 0
 end
 
 puts "\nResult: (#{number_passed} / #{input_dir.count}) - #{(number_passed.to_f / input_dir.count) * 100}%"
+`rm *.evm`
