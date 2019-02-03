@@ -59,30 +59,7 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 				I_ret (`L_Reg loc)
 			|]
 		else
-			failwith ("Error: Variable - " ^ id ^ " - is not bound in this environment.")
-			(* 
-				We are adding the dead return instruction as a 'hacky' way of being able to throw
-				bad variable read errors when that variable is being used within the context of
-				another expression (i.e. variable x is not defined, but x is used in a call to to_s).
-
-				By adding this extra return instruction, the evaluale_expression method will retrieve
-				the return instruction and extract its register, then remove the return instruction
-				from the set of instructions, thus leaving the halt in place (without the return, the
-				halt will will be retrieved instead and produce an error when get_register value is
-				called).
-
-				NOTE: This error is identifyable here... we can raise an error right now instead of
-				waiting until runtime.
-			*)
-		(*
-			let r1 = `L_Reg (next_location ()) in
-			let message = `L_Str ("Error: Variable - " ^ id ^ " - is not bound in this environment.") in
-			[|
-				I_const (r1, message);
-				I_halt r1;
-				I_ret r1
-			|]
-		*)
+			failwith ("Variable - " ^ id ^ " - is not bound in this environment.")
 
   (* Write a value to a variable *)
 	| ELocWr (id, expr) ->
@@ -155,8 +132,8 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		let instr_for_exp2 = expr_to_instr exp2 args next_location local_map function_names in
 		Array.append instr_for_exp1 instr_for_exp2
 
-	| EBinOp _ ->
-		binary_expr_to_instr body args next_location local_map function_names
+	| EBinOp (exp1, op, exp2) ->
+		binary_expr_to_instr exp1 exp2 op args next_location local_map function_names
 
 	| ETabRd (exp1, exp2) ->
 
@@ -212,8 +189,8 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		*)
 		(*Array.append instrucs [|test1;is_tab;check;wr_tab;iret;load_message;ihalt|]*)
 
-	| ECall _ ->
-		call_to_instr body args next_location local_map function_names
+	| ECall (function_name, exp_list) ->
+		call_to_instr function_name exp_list args next_location local_map function_names
 
 
 and evaluate_expression expr args next_location local_map function_names =
@@ -224,31 +201,25 @@ and evaluate_expression expr args next_location local_map function_names =
   let code_for_expr = Array.sub code_for_expr 0 return_position in (*remove return inst*)
   (code_for_expr, return_value)
 
-and binary_expr_to_instr expr args next_location local_map function_names =
-	let binary_op, exp1, exp2 = (
-		match expr with
-		| EBinOp (exp1, BPlus, exp2) -> ((fun l e1 e2 -> I_add(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BMinus, exp2) -> ((fun l e1 e2 -> I_sub(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BTimes, exp2) -> ((fun l e1 e2 -> I_mul(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BDiv, exp2) -> ((fun l e1 e2 -> I_div(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BLt, exp2) -> ((fun l e1 e2 -> I_lt(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BLeq, exp2) -> ((fun l e1 e2 -> I_leq(l, e1, e2)), exp1, exp2)
-		| EBinOp (exp1, BEq, exp2) -> ((fun l e1 e2 -> I_eq(l, e1, e2)), exp1, exp2)
-		| _ -> failwith "Illegal expr passed to binary_expr_to_instr"
-	) in
-	produce_binary_expr_instr exp1 exp2 binary_op args next_location local_map function_names
-
-and produce_binary_expr_instr exp1 exp2 binary_op args next_location local_map function_names =
-	(* TODO: Get binary operator name in error *)
-
+and binary_expr_to_instr exp1 exp2 op args next_location local_map function_names =
+	
 	let instr_for_exp1, exp1_value = evaluate_expression exp1 args next_location local_map function_names in
 	let instr_for_exp2, exp2_value = evaluate_expression exp2 args next_location local_map function_names in
-	let instrucs = Array.append instr_for_exp1 instr_for_exp2 in
-
+	let instrucs = Array.append instr_for_exp1 instr_for_exp2 in 
+	
 	let return_reg = `L_Reg (next_location ()) in
-	let binary_op_instr = binary_op return_reg exp1_value exp2_value in
-  
-  let exp_check_reg = `L_Reg (next_location ()) in
+	let binary_op_instr = (
+		match op with
+		| BPlus -> I_add(return_reg, exp1_value, exp2_value)
+		| BMinus -> I_sub(return_reg, exp1_value, exp2_value)
+		| BTimes -> I_mul(return_reg, exp1_value, exp2_value)
+		| BDiv -> I_div(return_reg, exp1_value, exp2_value)
+		| BLt -> I_lt(return_reg, exp1_value, exp2_value)
+		| BLeq -> I_leq(return_reg, exp1_value, exp2_value)
+		| BEq -> I_eq(return_reg, exp1_value, exp2_value)
+	) in
+	
+	let exp_check_reg = `L_Reg (next_location ()) in
   let sub_reg = `L_Reg (next_location ()) in 
   Array.append instrucs 
   [|
@@ -271,13 +242,7 @@ and produce_binary_expr_instr exp1 exp2 binary_op args next_location local_map f
   |]
 
 
-and call_to_instr func_expr args next_location local_map function_names =
-
-	let function_name, exp_list = (
-		match func_expr with
-			| ECall (function_name, exp_list) -> (function_name, exp_list)
-			| _ -> failwith "Only ECalls should be passed to call_to_instr"
-	) in
+and call_to_instr function_name exp_list args next_location local_map function_names =
 
 	if (List.mem function_name function_names) then (
 
@@ -311,10 +276,24 @@ and call_to_instr func_expr args next_location local_map function_names =
 
 and built_in_call_to_instr function_name exp_list args next_location local_map function_names =
 
+	( (* Handle not defined error *)
+		if not (List.mem function_name ["mktab"; "is_i"; "is_s"; "is_t"]) then 
+			failwith ("Function - " ^ function_name ^ " - is not defined")
+		else ()
+	); 
+
 	if function_name = "mktab" then (
 			let r1 = `L_Reg (next_location ()) in
 			[| I_mk_tab r1; I_ret r1 |]
 	) else (
+
+		( (* Handle argument errors *)
+			if exp_list = [] then 
+				failwith ("Missing argument, function - " ^ function_name ^ " - requires 1 argument")
+			else if ((List.length exp_list) > 1) then  
+				failwith ("Too many arguments, function - " ^ function_name ^ " - requires 1 argument")
+			else ()
+		); 
 
 		let exp::_ = exp_list in
 		let instr_for_exp, exp_value = evaluate_expression exp args next_location local_map function_names in
@@ -325,7 +304,7 @@ and built_in_call_to_instr function_name exp_list args next_location local_map f
 				| "is_i" -> I_is_int (r1, exp_value)
 				| "is_s" -> I_is_str (r1, exp_value)
 				| "is_t" -> I_is_tab (r1, exp_value)
-				| _ -> failwith ("Illegal function name passed to built_int_call_to_instr: " ^ function_name)
+				| _ -> failwith ("Function - " ^ function_name ^ " - is not defined")
 		) in
 
 		Array.append instr_for_exp
@@ -369,7 +348,10 @@ let compile_instruction ({fn_name=name; fn_args=args; fn_body=body}:simpl_fn)
 (rube_prog:prog) (next_location:(unit -> int)) (function_names:string list):prog =
 
 	let local_map, next_location = (map_args (Hashtbl.create 8) args next_location) in
-	let fn_instr = expr_to_instr body args next_location local_map function_names in (*turns expr into rubevm code*)
+
+	(*turns expr into rubevm code*)
+	let fn_instr = expr_to_instr body args next_location local_map function_names in 
+  
   (Hashtbl.add rube_prog name fn_instr);
   rube_prog
 ;;
