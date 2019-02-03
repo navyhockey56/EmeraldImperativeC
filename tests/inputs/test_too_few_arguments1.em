@@ -1,0 +1,6 @@
+def foo(a)
+  a + 1
+end
+def main()
+  foo()
+end
