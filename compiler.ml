@@ -25,7 +25,11 @@ let get_register_value = function
 ;;
 
 (* Handles argument count errors *)
-let check_function_arguments function_name count_map exp_list =
+let check_function_name_and_arguments function_name count_map exp_list =
+
+	if not (Hashtbl.mem count_map function_name) then 
+		failwith ("Function - " ^ function_name ^ " - is not defined")
+	else ();
 
 	let arg_count = Hashtbl.find count_map function_name in 
 	let exp_count = List.length exp_list in 
@@ -190,41 +194,67 @@ let rec expr_to_instr (body:expr) (count_map) (next_location:(unit -> int))
 		|]
 
 	| ETabWr (exp1, exp2, exp3) ->
+		(* Evaluate the expressions *)
 		let instr_for_exp1, exp1_value = evaluate_expression exp1 count_map next_location local_map function_names in
 		let instr_for_exp2, exp2_value = evaluate_expression exp2 count_map next_location local_map function_names in
 		let instr_for_exp3, exp3_value = evaluate_expression exp3 count_map next_location local_map function_names in
 		let exp_instr = Array.append (Array.append instr_for_exp1 instr_for_exp2) instr_for_exp3 in
+		
+		let r1 = `L_Reg (next_location ())  in
+		let r2 = `L_Reg (next_location ()) in
+		let error_message = `L_Str "Error: Invalid input on table read - first argument must be a table" in
 
 		Array.append exp_instr
 		[|
+			(* Check that the exp1 is a table *)
+			I_const (r2, (`L_Int 1));
+			I_is_tab (r1, exp1_value);
+			I_sub (r1, r1, r2);
+			I_if_zero (r1, 2);
+
+			(* Error if no table *)
+			I_const (r1, error_message);
+			I_halt r1;
+
 			I_wr_tab (exp1_value, exp2_value, exp3_value);
 			I_ret(exp3_value)
 		|]
-		(*
-		let error_message = "Error: Invalid input on table read" in
-		let load_message = I_const ((`L_Reg loc), (`L_Str error_message)) in
-		let ihalt = I_halt (`L_Reg loc) in
-		*)
-		(*Array.append instrucs [|test1;is_tab;check;wr_tab;iret;load_message;ihalt|]*)
 
 	| ECall (function_name, exp_list) ->
 		call_to_instr function_name exp_list count_map next_location local_map function_names
 
+(*
+	Creates instructions for evaluating an expression. Automatically strips
+	the return statement from the instructions, and extracts the register from it.
+	Returns a tuple of the instructions and the register that was to be returned.
 
+	@return [(instr array, reg)] Tuple of instructions and return register
+*)
 and evaluate_expression expr count_map next_location local_map function_names =
-  let code_for_expr = (expr_to_instr expr count_map next_location local_map function_names) in (*generate instrucs*)
+	(* generate instrucs for expression *)
+  let code_for_expr = (expr_to_instr expr count_map next_location local_map function_names) in 
+  
+  (* get return register *)
   let return_position = (Array.length code_for_expr) - 1 in
-  let return_register = Array.get code_for_expr return_position in (*get return inst*)
-  let return_value = get_register_value return_register in (*get the register*)
-  let code_for_expr = Array.sub code_for_expr 0 return_position in (*remove return inst*)
+  let return_register = Array.get code_for_expr return_position in 
+  let return_value = get_register_value return_register in 
+  
+  (* remove return instruction *)
+  let code_for_expr = Array.sub code_for_expr 0 return_position in 
+  (* instructions, return register *)
   (code_for_expr, return_value)
 
+(*
+	Creates the instructions for a EBinOp
+*)
 and binary_expr_to_instr exp1 exp2 op count_map next_location local_map function_names =
 	
+	(* Evaluate the expressions *)
 	let instr_for_exp1, exp1_value = evaluate_expression exp1 count_map next_location local_map function_names in
 	let instr_for_exp2, exp2_value = evaluate_expression exp2 count_map next_location local_map function_names in
 	let instrucs = Array.append instr_for_exp1 instr_for_exp2 in 
 	
+	(* Determine binary operator instruction *)
 	let return_reg = `L_Reg (next_location ()) in
 	let binary_op_instr = (
 		match op with
@@ -237,52 +267,75 @@ and binary_expr_to_instr exp1 exp2 op count_map next_location local_map function
 		| BEq -> I_eq(return_reg, exp1_value, exp2_value)
 	) in
 	
+	(* Registers for checking args are ints *)
 	let exp_check_reg = `L_Reg (next_location ()) in
   let sub_reg = `L_Reg (next_location ()) in 
+  
   Array.append instrucs 
   [|
   	I_const (sub_reg, `L_Int 1);
 
+  	(* Check that exp1 is an int *)
     I_is_int (exp_check_reg, exp1_value);
     I_sub(exp_check_reg, exp_check_reg, sub_reg);
     I_if_zero (exp_check_reg, 2);
     I_const (exp_check_reg, (`L_Str "Illegal argument (1) passed to binary operator. Arguments must be integers"));
     I_halt exp_check_reg;
     
+    (* Check that exp2 is an int *)
     I_is_int (exp_check_reg, exp2_value);
     I_sub(exp_check_reg, exp_check_reg, sub_reg);
     I_if_zero (exp_check_reg, 2);
     I_const (exp_check_reg, (`L_Str "Illegal argument (2) passed to binary operator. Arguments must be integers"));
     I_halt exp_check_reg;
 
+    (* Run the binary op *)
 		binary_op_instr;
     I_ret return_reg
   |]
 
-
+(*
+	Creates the instructions for an ECall 
+*)
 and call_to_instr function_name exp_list count_map next_location local_map function_names =
 
+	(* Check that the number of supplied args *)
+	check_function_name_and_arguments function_name count_map exp_list;
+
 	if (List.mem function_name function_names) then (
+		(*
+			This is a call to a user defined function.
+		*)
 
-		check_function_arguments function_name count_map exp_list;
-
+		(* Create the instructions for evaluating the arguments to the call *)
 		let instrucs, regs = List.fold_left (
 			fun (instrucs,regs) exp ->
+
 				let instr_for_exp, exp_value = evaluate_expression exp count_map next_location local_map function_names in
 				let instrucs = Array.append instrucs instr_for_exp in
 				let regs = regs@[exp_value] in
+				
 				(instrucs, regs)
+
 			) ([||],[]) exp_list in
 
-			let instrucs = List.fold_left (fun instrucs reg_value ->
-				let loc = next_location () in
-				Array.append instrucs [|I_mov ((`L_Reg loc), reg_value)|]
+			(* Instructions for copying all the argument expressions into new registers *)
+			let instrucs = List.fold_left (
+				fun instrucs reg_value ->
+					
+					let loc = next_location () in
+					Array.append instrucs [|I_mov ((`L_Reg loc), reg_value)|]
+
 			) instrucs regs in
 
+			(* Create function name register *)
 			let r1_loc = next_location () in
 			let r1 = `L_Reg r1_loc in
+
+			(* Determine the locations of the argument registers *)
 			let call_start = r1_loc - (List.length regs) in
 			let call_end = r1_loc - 1 in
+			
 			Array.append instrucs
 			[|
 				I_const (r1, (`L_Id function_name));
@@ -290,23 +343,24 @@ and call_to_instr function_name exp_list count_map next_location local_map funct
 				I_ret (`L_Reg call_start)
 			|]
 
-	) else (
+	) else ( (* This is a built in call *)
 		built_in_call_to_instr function_name exp_list count_map next_location local_map function_names
 	)
 
+(*
+	Creates the instructions for a built in function.
+	Note: This also handles the error of calling an undefined function.
+*)
 and built_in_call_to_instr function_name exp_list count_map next_location local_map function_names =
 
-	( (* Handle not defined error *)
-		if not (List.mem function_name ["mktab"; "is_i"; "is_s"; "is_t"]) then 
-			failwith ("Function - " ^ function_name ^ " - is not defined")
-		else ()
-	); 
-
-	if function_name = "mktab" then ( 
+	if function_name = "mktab" then (
+			
 			let r1 = `L_Reg (next_location ()) in
 			[| I_mk_tab r1; I_ret r1 |]
-	) else (
 
+	) else (
+		
+		(* Instructions for is_i, is_s, and is_t *)
 		let exp::_ = exp_list in
 		let instr_for_exp, exp_value = evaluate_expression exp count_map next_location local_map function_names in
 		let r1 = `L_Reg (next_location ()) in
@@ -325,7 +379,6 @@ and built_in_call_to_instr function_name exp_list count_map next_location local_
 			I_ret r1
 		|]
 	)
-
 ;;
 
 
@@ -345,9 +398,14 @@ let rec map_args (tbl:((string, int) Hashtbl.t)) (ids:string list) (next_locatio
     map_args tbl tail next_location
 ;;
 
+(*
+	Maps the functions in the program by their name to their argument counts. Storing the
+	result in count_map.
+*)
 let rec create_function_args_count_map (p:simpl_prog) count_map function_names = 
 	match p with 
 	 | [] -> 
+	 		(* Add the arg counts for all the built in functions *)
 	 		if not (List.mem "to_s" function_names) then Hashtbl.replace count_map "to_s" 1 else ();
 	 		if not (List.mem "to_i" function_names) then Hashtbl.replace count_map "to_i" 1 else ();
 	 		if not (List.mem "concat" function_names) then Hashtbl.replace count_map "concat" 2 else ();
@@ -358,11 +416,14 @@ let rec create_function_args_count_map (p:simpl_prog) count_map function_names =
 	 		if not (List.mem "is_s" function_names) then Hashtbl.replace count_map "is_s" 1 else ();
 	 		if not (List.mem "is_i" function_names) then Hashtbl.replace count_map "is_i" 1 else ();
 	 		if not (List.mem "is_t" function_names) then Hashtbl.replace count_map "is_t" 1 else ();
+	 		if not (List.mem "mktab" function_names) then Hashtbl.replace count_map "mktab" 0 else ();
+	 		(* Return the updated table *)
 	 		count_map
 
 	 | head::tail -> 
-	 	Hashtbl.replace count_map (head.fn_name) (List.length (head.fn_args));
-	 	create_function_args_count_map tail count_map function_names
+	 		(* Add the arg count of the current function *)
+	 		Hashtbl.replace count_map (head.fn_name) (List.length (head.fn_args));
+	 		create_function_args_count_map tail count_map function_names
 ;;
 
 (*
@@ -405,10 +466,22 @@ let rec compile_prog_aux (p:simpl_prog) (evm_prog:prog) (function_names:string l
   Compiles a emerarld program into emeraldbyte code.
 *)
 let compile_prog (p:simpl_prog):prog =
+	(* Will store the resulting EmeraldVM *)
 	let evm_prog = Hashtbl.create (List.length p) in 
+
+	(* Get the user defined function names *)
 	let function_names = extract_function_names [] p in 
+
+	(* 
+		Create a map from funciton name to number of arguments for 
+		determining incorrect argument exceptions
+	 *)
 	let count_map = create_function_args_count_map p (Hashtbl.create (List.length p)) function_names in 
+
+	(* Add the prebuilt functions from EmeraldVM into viable function names *)
 	let function_names = function_names@["to_s";"to_i";"concat";"print_string";"print_int";"size";"length"] in 
+  
+	(* Compile the program *)
   compile_prog_aux p evm_prog function_names count_map
 ;;
 
