@@ -203,7 +203,7 @@ let rec expr_to_instr (body:expr) (count_map) (next_location:(unit -> int))
 		
 		let r1 = `L_Reg (next_location ())  in
 		let r2 = `L_Reg (next_location ()) in
-		let error_message = `L_Str "Error: Invalid input on table read - first argument must be a table" in
+		let error_message = `L_Str "Error: Invalid input on table write - first argument must be a table" in
 
 		Array.append exp_instr
 		[|
