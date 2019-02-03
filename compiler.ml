@@ -95,6 +95,7 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		let instr_for_exp3 = (expr_to_instr exp3 args next_location local_map function_names) in
 
 		(*if exp1 = 0 jump past code of exp2 - see how code is organized below*)
+
 		let inst = I_if_zero (exp1_value, (Array.length instr_for_exp2)) in
 
 		(*code_of_v1 + [|inst1|] + code_of_v2 + code_of_v3 *)
@@ -110,22 +111,21 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		(* Build code for exp1 and the value*)
 		let instr_for_exp1, exp1_value = evaluate_expression exp1 args next_location local_map function_names in
 		(* Build the code for exp2 - remove the return instr *)
-		let instr_for_exp2, _ = evaluate_expression exp1 args next_location local_map function_names in
+		let instr_for_exp2, _ = evaluate_expression exp2 args next_location local_map function_names in
 		
 		let length_of_exp1_instr = Array.length instr_for_exp1 in
 		let length_of_exp2_instr = Array.length instr_for_exp2 in 
-
-		(* if exp1 = 0 then jump past code of exp2 - see how code is organized below *)
-		let inst1 = I_if_zero (exp1_value, (length_of_exp2_instr + 1)) in
-
-		(* Jump back to the top of the while loop *)
-		let inst2 = I_jmp (-1 * (2 + length_of_exp2_instr + length_of_exp1_instr)) in
-		let inst3 = I_ret (exp1_value) in (* Create the return from the while loop*)
-
+		
 		(* put it all together *)
-		let instrucs = Array.append instr_for_exp1 ([|inst1|]) in
+		let instrucs = Array.append instr_for_exp1 [|I_if_zero (exp1_value, (length_of_exp2_instr + 1))|] in
 		let instrucs = Array.append instrucs instr_for_exp2 in
-		Array.append instrucs ([|inst2;inst3|])
+		Array.append instrucs 
+		[|
+			(* Jump back to the top of the while loop *)
+			I_jmp (-1 * (2 + length_of_exp2_instr + length_of_exp1_instr)); 
+			I_ret (exp1_value)
+		|]
+
 
 	(* Compute expr1, then exp2 *)
 	| ESeq (exp1, exp2) ->
@@ -165,7 +165,7 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		let instr_for_exp1, exp1_value = evaluate_expression exp1 args next_location local_map function_names in
 		let instr_for_exp2, exp2_value = evaluate_expression exp2 args next_location local_map function_names in
 		let instr_for_exp3, exp3_value = evaluate_expression exp3 args next_location local_map function_names in
-		let exp_instr = Array.append (Array.append instr_for_exp1 instr_for_exp1) instr_for_exp3 in 
+		let exp_instr = Array.append (Array.append instr_for_exp1 instr_for_exp2) instr_for_exp3 in 
 
 		Array.append exp_instr
 		[|
@@ -283,7 +283,7 @@ and call_to_instr func_expr args next_location local_map function_names =
 	)
 
 and built_in_call_to_instr function_name exp_list args next_location local_map function_names = 
-	
+
 	if function_name = "mktab" then (
 			let r1 = `L_Reg (next_location ()) in 
 			[| I_mk_tab r1; I_ret r1 |]
@@ -298,7 +298,7 @@ and built_in_call_to_instr function_name exp_list args next_location local_map f
 				| "is_i" -> I_is_int (r1, exp_value)
 				| "is_s" -> I_is_str (r1, exp_value)
 				| "is_t" -> I_is_tab (r1, exp_value)
-				| _ -> failwith "Illegal function name passed to built_int_call_to_instr"
+				| _ -> failwith ("Illegal function name passed to built_int_call_to_instr: " ^ function_name)
 		) in 
 
 		Array.append instr_for_exp 
@@ -332,7 +332,7 @@ let rec map_args (tbl:((string, int) Hashtbl.t)) (ids:string list) (next_locatio
 *)
 let rec extract_function_names (function_names:(string list)) (p:simpl_prog):(string list) =
 	match p with
-	| [] -> function_names
+	| [] -> function_names@["to_s";"to_i";"concat";"print_string";"print_int";"size";"length"]
 	| head::tail -> extract_function_names ((head.fn_name)::function_names) tail
 
 (*
