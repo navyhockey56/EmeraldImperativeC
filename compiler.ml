@@ -24,9 +24,10 @@ let get_register_value = function
   | _ -> failwith "coding error: expected return instruction"
 ;;
 
-(* Handles argument count errors *)
+(* Checks function definition and argument count errors *)
 let check_function_name_and_arguments function_name count_map exp_list =
 
+	(* Check that the function exists *)
 	if not (Hashtbl.mem count_map function_name) then 
 		failwith ("Function - " ^ function_name ^ " - is not defined")
 	else ();
@@ -354,12 +355,9 @@ and call_to_instr function_name exp_list count_map next_location local_map funct
 and built_in_call_to_instr function_name exp_list count_map next_location local_map function_names =
 
 	if function_name = "mktab" then (
-			
 			let r1 = `L_Reg (next_location ()) in
 			[| I_mk_tab r1; I_ret r1 |]
-
 	) else (
-		
 		(* Instructions for is_i, is_s, and is_t *)
 		let exp::_ = exp_list in
 		let instr_for_exp, exp_value = evaluate_expression exp count_map next_location local_map function_names in
