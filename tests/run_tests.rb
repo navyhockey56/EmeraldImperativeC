@@ -15,14 +15,10 @@ number_passed = 0
 	test_name = input[7...(input.length - 3)]
 
 	# Compile the program
-	error = !`../emeraldc "#{input}"`.empty?
-	if error
-		print_test_result test_name, false, error
-		next
-	end
+	output = `../emeraldc "#{input}"`
 
 	# Run the rubevm
-	output = `emeraldvm #{test_name}.evm`
+	output = `emeraldvm #{test_name}.evm` if output.empty?
 
 	if (out_dir = Dir["outputs/#{test_name}/*.out"]).empty?
 		output_file = "outputs/#{test_name}.out"

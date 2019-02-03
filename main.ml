@@ -96,13 +96,17 @@ let main () =
   let p = parse_file file_name in
 
   (* Compile the program *)
-  let (p':Instr.prog) = Compiler.compile_prog p in
-
+  let (p':Instr.prog) = try 
+    Compiler.compile_prog p 
+  with Failure ex ->
+    print_endline ("Compilation Failure: " ^ ex); exit 0 
+  in 
   (* Open the output file *)
   let out_chan = open_out (simple_file_name ^ ".evm") in
-  
+    
   (* Dump the output program into the file*)
-  disassemble out_chan p'
+   disassemble out_chan p'
+  
 ;;
 
 main ()

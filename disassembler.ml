@@ -36,7 +36,7 @@ let dis_instr o = function
   | I_halt r-> Printf.fprintf o "  halt %a" reg r
   | I_is_int (r0, r1) -> Printf.fprintf o "  is_int %a, %a" reg r0 reg r1
   | I_is_str (r0, r1) -> Printf.fprintf o "  is_str %a, %a" reg r0 reg r1
-  | I_is_tab (r0, r1) -> Printf.fprintf o "  is_str %a, %a" reg r0 reg r1
+  | I_is_tab (r0, r1) -> Printf.fprintf o "  is_tab %a, %a" reg r0 reg r1
 
 let rec dis_instrs o (is:instr array) =
   Array.iter (fun i -> Printf.fprintf o "%a\n" dis_instr i) is

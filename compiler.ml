@@ -59,12 +59,30 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 				I_ret (`L_Reg loc)
 			|]
 		else
+			failwith ("Error: Variable - " ^ id ^ " - is not bound in this environment.")
+			(* 
+				We are adding the dead return instruction as a 'hacky' way of being able to throw
+				bad variable read errors when that variable is being used within the context of
+				another expression (i.e. variable x is not defined, but x is used in a call to to_s).
+
+				By adding this extra return instruction, the evaluale_expression method will retrieve
+				the return instruction and extract its register, then remove the return instruction
+				from the set of instructions, thus leaving the halt in place (without the return, the
+				halt will will be retrieved instead and produce an error when get_register value is
+				called).
+
+				NOTE: This error is identifyable here... we can raise an error right now instead of
+				waiting until runtime.
+			*)
+		(*
 			let r1 = `L_Reg (next_location ()) in
 			let message = `L_Str ("Error: Variable - " ^ id ^ " - is not bound in this environment.") in
 			[|
 				I_const (r1, message);
-				I_halt r1
+				I_halt r1;
+				I_ret r1
 			|]
+		*)
 
   (* Write a value to a variable *)
 	| ELocWr (id, expr) ->
@@ -95,7 +113,6 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		let instr_for_exp3 = (expr_to_instr exp3 args next_location local_map function_names) in
 
 		(*if exp1 = 0 jump past code of exp2 - see how code is organized below*)
-
 		let inst = I_if_zero (exp1_value, (Array.length instr_for_exp2)) in
 
 		(*code_of_v1 + [|inst1|] + code_of_v2 + code_of_v3 *)
@@ -147,16 +164,32 @@ let rec expr_to_instr (body:expr) (args:string list) (next_location:(unit -> int
 		let instr_for_exp2, exp2_value = evaluate_expression exp2 args next_location local_map function_names in
 		let r1 = `L_Reg (next_location ())  in
 		let r2 = `L_Reg (next_location ()) in
-		let error_message = `L_Str "Error: Invalid input on table read" in
+		let error_message1 = `L_Str "Error: Invalid input on table read - first argument must be a table" in
+		let error_message2 = `L_Str "Error: Invalid input on table read - key does not exist" in
 
 		Array.append (Array.append instr_for_exp1 instr_for_exp2)
 		[|
-			I_has_tab (r1, exp1_value, exp2_value);
 			I_const (r2, (`L_Int 1));
+
+			(* Check that the exp1 is a table *)
+			I_is_tab (r1, exp1_value);
 			I_sub (r1, r1, r2);
 			I_if_zero (r1, 2);
-			I_const (r1, error_message);
+
+			(* Error if no table *)
+			I_const (r1, error_message1);
 			I_halt r1;
+
+			(* Check that the table key exists *)
+			I_has_tab (r1, exp1_value, exp2_value);
+			I_sub (r1, r1, r2);
+			I_if_zero (r1, 2);
+			
+			(* Error if key doesn't exist *)
+			I_const (r1, error_message2);
+			I_halt r1;
+			
+			(* Read from the table *)
 			I_rd_tab (r1, exp1_value, exp2_value);
 			I_ret r1
 		|]
