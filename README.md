@@ -1,5 +1,5 @@
 ## EmeraldC
-EmeraldC is a compiler for the imperative langauge Emerald. EmeraldC compiles Emerald into byte code language EmeraldByte which can be run with `EmeraltdVM - https://github.com/navyhockey56/emeraldvm/blob/master/README.md`
+EmeraldC is a compiler for the imperative langauge Emerald. EmeraldC compiles Emerald into byte code language EmeraldByte which can be run with `EmeraltdVM - https://github.com/navyhockey56/emeraldvm`
 
 ### Build Requirements
 - OCaml (built with 4.06)
