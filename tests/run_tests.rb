@@ -11,7 +11,7 @@ end
 number_passed = 0
 
 (input_dir = Dir["inputs/test_*.em"]).each do |input|
-	puts "\n-----\n"
+	puts "\n----------------------------------\n"
 	test_name = input[7...(input.length - 3)]
 
 	# Compile the program
