@@ -26,9 +26,9 @@ Compiling an Emerald file is as simple as:
 Compiling will create a `.evm` with the same name as the Emerald program and place it in your current directory. You can then run the byte code using `EmeraldVM`
 
 ### Running the EmeraldVM tests
-The ruby test script requires your project structure to be:
+The ruby test script requires that `EmeraldVM` be on your PATH as `emeraldvm` and your project structure to be:
 ```
-main.byte
+emeraldc
 tests/run_tests.rb
 tests/inputs/
 tests/outputs/
