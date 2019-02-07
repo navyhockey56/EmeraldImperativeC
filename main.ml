@@ -71,7 +71,7 @@ and print_program (fs:simpl_prog) =
 let rec determine_file_name file_name = 
 	let length = String.length file_name in 
 	match (String.index_from_opt file_name 0 '/') with 
-		| None -> String.sub file_name 0 (length - 3)
+		| None -> String.sub file_name 0 (length - 4)
 		| Some i -> 
 			let file_name = String.sub file_name (i + 1) (length - i - 1) in 
 			determine_file_name file_name 

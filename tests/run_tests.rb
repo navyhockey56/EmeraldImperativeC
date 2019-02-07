@@ -10,12 +10,12 @@ end
 
 number_passed = 0
 
-(input_dir = Dir["inputs/test_*.em"]).each do |input|
+(input_dir = Dir["inputs/test_*.emi"]).each do |input|
 	puts "\n----------------------------------\n"
-	test_name = input[7...(input.length - 3)]
+	test_name = input[7...(input.length - 4)]
 
 	# Compile the program
-	output = `../emeraldc "#{input}"`
+	output = `../emeraldic "#{input}"`
 
 	# Run the rubevm
 	output = `emeraldvm #{test_name}.evm` if output.empty?
