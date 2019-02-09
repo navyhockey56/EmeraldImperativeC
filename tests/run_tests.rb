@@ -1,18 +1,23 @@
-#!/usr/bin/env ruby
-
-def print_test_result(test_name, passed, message=nil)
-	if passed
-			puts "Pass -> #{test_name}"
-	else
-			puts "Fail -> #{test_name}\n#{message}"
-	end
+def print_deliminater
+	puts "\n------------------------\n"
 end
 
-number_passed = 0
+def print_test_results(passed, failed)
+	print_deliminater
+	puts "\nPassed: #{passed}\n"
+	failed.each do |failure|
+		print_deliminater
+		puts "\nFailed: #{failure[:test_name]}\n#{failure[:message]}"
+	end
+	print_deliminater
+end
 
-(input_dir = Dir["inputs/test_*.emi"]).each do |input|
-	puts "\n----------------------------------\n"
+passed_tests = []
+failed_tests = []
+
+(input_dir = Dir["inputs/test_*.emi"].sort).each do |input|
 	test_name = input[7...(input.length - 4)]
+	puts "Ruuning: #{test_name}\n"
 
 	# Compile the program
 	output = `../emeraldic "#{input}"`
@@ -25,10 +30,10 @@ number_passed = 0
 		if File.exist? output_file
       passed = (expected_output = File.read(output_file)) == output
       message = "Expected:\n#{[expected_output]}\nBut output was:\n#{[output]}" unless passed
-      print_test_result test_name, passed, message
-      number_passed += passed ? 1 : 0;
+      passed_tests << test_name if passed 
+      failed_tests << {test_name: test_name, message: message} unless passed
     else
-      print_test_result test_name, false, 'Test result not found in output directory'
+      failed_tests << {test_name: test_name, message: 'Test result not found in output directory'}
     end
 	else
 		passed = false
@@ -42,10 +47,16 @@ number_passed = 0
 		unless passed
 			message = "Expected one of: #{expected_outputs}\nBut output was:\n#{[output]}"
 		end
-		print_test_result test_name, passed, message
-		number_passed += 1 if passed
+		message = "Expected one of: #{expected_outputs}\nBut output was:\n#{[output]}"
+		passed_tests << test_name if passed 
+    failed_tests << {test_name: test_name, message: message} unless passed
 	end
 end
 
+number_passed = passed_tests.count
+print_test_results passed_tests, failed_tests
 puts "\nResult: (#{number_passed} / #{input_dir.count}) - #{(number_passed.to_f / input_dir.count) * 100}%"
+
 `rm *.evm`
+
+
